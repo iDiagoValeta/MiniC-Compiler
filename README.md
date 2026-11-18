@@ -1,94 +1,62 @@
 # MiniC Compiler (CMC)
 
-A functional compiler for a subset of the C language, featuring lexical and syntactic analysis, semantic validation, and intermediate code generation.
+**A compiler for a small C-like language (MiniC), written with Flex and Bison, that checks types and scopes and emits three-address intermediate code.**
 
-## 🚀 Features
+> **Context.** Built in January 2026 as a compiler project, when I was finishing my Computer Engineering degree at UPV and working at Grupo CEU. The headers of `libtds.h` and `libgci.h` and the file `src/principal.c` credit Jose Miguel Benedi (DSIC, UPV), so the symbol table and code-generation libraries and the driver come from him; the scanner and grammar are in `src/alex.l` and `src/asin.y`. This repo belongs to the second phase of my GitHub (November 2025 to April 2026), when I was working on compilers.
 
-- **Data Types**: Supports `int` and `bool` types.
-- **Control Structures**: Implements `if`, `else`, and `for` loops.
-- **I/O Operations**: Built-in `read` and `print` statements.
-- **Operators**:
-  - Arithmetic (`+`, `-`, `*`, `/`)
-  - Logical (`&&`, `||`)
-  - Relational (`==`, `!=`, `>=`, `<=`, `>`, `<`)
-- **Code Generation**: Generates 3-address intermediate code (`.c3d`).
-- **Debug Tools**: Options to view the Symbol Table and verbose compilation traces.
+## What it does
 
-## 🛠️ Architecture
+- Tokenizes MiniC source with a Flex scanner (`src/alex.l`), skipping `//` comments.
+- Parses it with a Bison grammar (`src/asin.y`) covering global and local declarations, functions with parameters, `if`/`else` (the `else` branch is mandatory), `for`, `read` and `print`.
+- Supports `int` and `bool` scalars and fixed-size one-dimensional arrays, with constant initializers for globals and locals.
+- Handles expressions with assignment, logical (`&&`, `||`), equality, relational, additive, multiplicative and unary (`!`, `-`, `+`) operators.
+- Performs semantic checks and reports them with the line number: repeated identifiers, type mismatches in constant initializers, non-boolean `if`/`for` conditions, wrong return type, non-positive array size, missing `main`.
+- Emits three-address code through the provided code-generation library when there are no errors.
+- Debug flags: `-v` echoes the source as it is scanned, `-t` prints the symbol table.
 
-The compiler is built with the following components:
-- **Lexical Analyzer (`alex.l`)**: Tokenizes the source code using Flex.
-- **Syntax Analyzer (`asin.y`)**: Parses the token stream and defines the grammar rules using Bison.
-- **Symbol Table (`libtds`)**: Manages variable scopes and type checking.
-- **Code Generator (`libgci`)**: Produces the intermediate machine code.
+## How it works
 
-## 📋 Prerequisites
+The scanner returns tokens and attaches values (integer constants, duplicated identifier strings). The Bison grammar performs syntax-directed translation: semantic actions look up and insert symbols in the table (`insTdS`, `obtTdS`, `insTdA`, `insTdD`) and emit instructions with `emite`. Each expression carries a type and a position in the stack frame as a temporary variable. Control flow (`if`, `for`) uses backpatching: a jump is emitted with an unknown target (`creaLans`) and filled in later (`completaLans`). Functions open a new scope level (`cargaContexto`), reserve their frame with `PUSHFP`/`FPTOP`/`INCTOP`, and return through `RET` (`FIN` for `main`). The program begins with a call to `main`, whose address is patched once `main` is found. Note that `&&` and `||` are compiled as multiplication and addition of the boolean operands.
 
-To build and run this project, you need:
-- **GCC** (GNU Compiler Collection)
-- **Flex**
-- **Bison**
-- **Make**
+## Run it
 
-## 🔧 Installation & Build
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/iDiagoValeta/MiniC-Compiler.git
-   cd MiniC-Compiler
-   ```
-
-2. Compile the project using the Makefile:
-   ```bash
-   make
-   ```
-   This will generate the `cmc` executable.
-
-## 💻 Usage
-
-Run the compiler with a source file as an argument:
+Needs GCC, Flex, Bison and Make. I could not build it in my environment (Flex and Bison are not installed there), so the commands below follow the Makefile and are not re-verified.
 
 ```bash
-./cmc [options] <source_file>
+make                       # generates alex.c and asin.c, builds ./cmc
+./cmc [-v] [-t] file.c     # compile a MiniC source file
+make clean
 ```
 
-### Options
-- `-v`: **Verbose mode**. Prints a trace of the compilation process.
-- `-t`: **Symbol Table**. Displays the contents of the Symbol Table after compilation.
-
-### Example
-
-```bash
-./cmc -v -t examples/test.c
-```
-
-## 📂 Project Structure
-
-```
-.
-├── bin/            # Executables (Virtual Machine)
-├── include/        # Header files (.h)
-├── lib/            # Static libraries (libtds, libgci)
-├── src/            # Source code (alex.l, asin.y, principal.c)
-├── tmp/            # Temporary output files (.c3d)
-├── Makefile        # Build configuration
-└── cmc             # Compiled executable
-```
-
-## 📝 Example Code
-
-The compiler supports standard C-like syntax:
+On success the compiler writes the intermediate code through `volcarCodigo`, which the prebuilt library stores in a `.c3d` file (the extension is the only thing I could confirm from the library). The repository has no example source files, no test suite and no virtual machine to run the generated code. Sample program:
 
 ```c
 int main() {
     int i;
     int sum;
     sum = 0;
-    
     for (i = 0; i < 10; i = i + 1) {
         sum = sum + i;
     }
-    
     print(sum);
+    return 0;
 }
 ```
+
+The grammar requires a `return` expression at the end of every function body, as above.
+
+## Repository layout
+
+```
+src/alex.l        Flex scanner
+src/asin.y        Bison grammar with semantic actions and code generation
+src/principal.c   main(), option parsing, error reporting
+include/          header.h (project) and libtds.h, libgci.h (provided library interfaces)
+lib/              prebuilt libtds.a and libgci.a (symbol table and code generation)
+alex.c, asin.c    generated by Flex and Bison, committed
+Makefile          build rules
+```
+
+## Stack
+
+C, Flex, Bison, GNU Make.
